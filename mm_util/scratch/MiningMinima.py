@@ -1,9 +1,17 @@
+import numpy as np
+import scipy
+import itertools
+
+from pyrosetta import *
+from pyrosetta.rosetta import *
+init()
+
 class MiningMinima:
     '''
     A single MM style simulation
     '''
 
-    def __init__(self, seq1='', seq2='', infile='')
+    def __init__(self, seq1='', seq2='', infile='', scorefxn = 'stepwise/rna/turner')
 
     '''
     Create a MM object.
@@ -14,10 +22,35 @@ class MiningMinima:
     seq2:   The second sequence for a double strand simulation
     infile: A PDB file on which to run mining minima
     '''
-    if !infile: 
+        if !infile: 
 
-        self.seq1 = seq1
-        if seq2: self.seq2 = seq2
+            self.seq1 = seq1
+            if seq2: self.seq2 = seq2
 
-    else: self.infile = infile
+        else: self.infile = infile
     
+		self.input_pose = Pose()
+		if seq1: self.movemap, self.dof_dict = pose_setup_turner(self, self.input_pose, seq1, seq2)
+		else: self.movemap, self.dof_dict = pose_setup_from_file(self, self.input_pose, infile)
+		
+		self.scorefxn = core.scoring.ScoreFunctionFactory.create_score_function(scorefxn)
+		
+		self.min_pose = Pose()
+		find_minimum(self, self.min_pose, self.scorefxn)
+		
+		self.hessian = np.array
+	
+	
+	
+	
+	def pose_setup_turner(self, self.input_pose, self.seq1, self.seq2)
+	
+    def pose_setup_from_file(self, self.input_pose, self.infile) 
+	
+	def find_minimum(self, self.min_pose, self.scorefxn)
+	
+	def calc_hessian_at_min(self, self.min_pose, self.scorefxn, self.dof_dict)
+	
+	def mode_scan(self, self.min_pose, self.scorefxn, self.dof_dict)
+	
+	def harmonic_free_energy
