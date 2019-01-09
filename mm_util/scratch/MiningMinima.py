@@ -23,6 +23,8 @@ class MiningMinima:
     infile: A PDB file on which to run mining minima
     '''
         
+		self.harmonic_free_energy = 0.0
+		self.anharmonic_free_energy = 0.0
 		KT_IN_KCAL = 0.6163
 		
 		if !infile: 
@@ -36,7 +38,7 @@ class MiningMinima:
 		if seq1: self.movemap, self.dof_dict = pose_setup_turner(self, self.input_pose, seq1, seq2)
 		else: self.movemap, self.dof_dict = pose_setup_from_file(self, self.input_pose, infile)
 		
-		self.N_DOFS = len(dof_dict)
+		self.n_dofs = len(dof_dict)
 		
 		self.scorefxn = core.scoring.ScoreFunctionFactory.create_score_function(scorefxn)
 		
@@ -49,8 +51,8 @@ class MiningMinima:
 		self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
 		
 		# Calculate free energy
-		self.harmonic_free_energy = self.calc_harmonic_free_energy(self)
-		self.free_energy, _ = mode_scan(self, self.min_pose, self.scorefxn, self.dof_dict)
+		self.calc_harmonic_free_energy()
+		self.calc_anharmoic_free_energy()
 		
 	
 	
@@ -64,14 +66,25 @@ class MiningMinima:
 		return movemap, dof_dict
 		
 	def find_minimum(self, self.min_pose, self.scorefxn)
+	#def calc_hessian_at_min(self, self.min_pose, self.scorefxn, self.dof_dict)
 	
-	def calc_hessian_at_min(self, self.min_pose, self.scorefxn, self.dof_dict)
 	
-	def mode_scan(self, self.min_pose, self.scorefxn, self.dof_dict)
+	#def mode_scan(self, self.min_pose, self.scorefxn, self.dof_dict) 
+	def calc_anharmonic_free_energy(self):
 	
-	def calc_harmonic_free_energy(self, self.min_energy, self.N_DOFS, self.eigenvalues, kt = 1.0)
+		total_partition = 1.0
+		
+		for i in range(self.n_dofs): 
+			
+			mode_partition, _ = mode_scan(self.min_pose, self.scorefxn, self.dof_dict)
+			total_partition *= mode_partition
+		
+		self.anharmonic_free_energy = total_partition
+			
+		
+	def calc_harmonic_free_energy(self):
 	
-		return -kt*(self.min_energy - 0.5*self.N_DOFS*np.log(2*np.pi*kt) + 0.5*self.N_DOFS*np.log(np.prod(self.eigenvalues)))
+		self.harmonic_free_energy = -kt*(self.min_energy - 0.5*self.n_dofs*np.log(2*np.pi*kt) + 0.5*self.n_dofs*np.log(np.prod(self.eigenvalues)))
 
 def pose_setup_from_file(pose, infile)
 
@@ -80,5 +93,5 @@ def pose_setup_from_file(pose, infile)
 def find_minimum(min_pose, scorefxn, movemap)
 
 	#HMMMM maybe let user specify a particular minmover, otherwise just setup a default minmover? we'll worry about this later
-	minmover = MinMover(
+		minmover = MinMover(
 	
