@@ -2,10 +2,9 @@ import numpy as np
 import scipy
 
 def mode_scan(min_pose, mode, scorefxn, dof_dict, h = 1.0, range = 60.0, kt = 1.0)
-'''
-Given an input pose (assumed to be a local minimum) and a correspondig mode, returns the partition
-function evaluated along the mode.
-'''
+	'''
+	Given an input pose (assumed to be a local minimum) and a correspondig mode, returns the partition
+	function evaluated along the mode.'''
 
 ## Initialize dofs from input pose and dof_dict -- list comprehension?
 ## We should probably return the scanned modes for manipulation, as well as a calculated free energy
@@ -18,7 +17,7 @@ function evaluated along the mode.
 	temp.assign(pose_min)
 	
 	# Read off dofs from input pose
-	dofs = [pose_min.torsion(dof_dict{key}) for key in dof_dict]
+	dofs = [pose_min.torsion(dof_dict[key]) for key in dof_dict]
 	
 	ii = 0
 	result = np.array([])
