@@ -45,7 +45,7 @@ class MiningMinima:
 		self.min_pose = Pose()
 		self.min_pose.assign(self.input_pose)
 		
-		find_minimum(self, self.min_pose, self.scorefxn)
+		find_minimum(self)
 		self.min_energy = self.scorefxn(self.min_pose)
 		
 		# Calculate hessian at base of minimum and normal modes
@@ -67,11 +67,22 @@ class MiningMinima:
 	
 		return movemap, dof_dict
 		
-	def find_minimum(self, self.min_pose, self.scorefxn)
 	#def calc_hessian_at_min(self, self.min_pose, self.scorefxn, self.dof_dict)
 	
 	
 	#def mode_scan(self, self.min_pose, self.scorefxn, self.dof_dict) 
+	
+	def find_minimum(self):
+		'''Minimizes an input pose using indicated scorefunction and movemap'''
+	
+		minmover = rosetta.protocols.minimization_packing.MinMover(movemap, scorefxn,
+				'lbfgs_armijo_nonmonotone', 1.0e-7 True)
+		minmover.max_iter(1e7)
+		minmover.min_options().use_nblist(True)
+		minmover.min_options().nblist_auto_update(True)
+		
+		minmover.apply(self.min_pose)
+		
 	def calc_anharmonic_free_energy(self):
 	
 		total_partition = 1.0
@@ -83,7 +94,6 @@ class MiningMinima:
 		
 		self.anharmonic_free_energy = total_partition
 			
-		
 	def calc_harmonic_free_energy(self):
 	
 		self.harmonic_free_energy = -kt*(self.min_energy - 0.5*self.n_dofs*np.log(2*np.pi*kt) + 0.5*self.n_dofs*np.log(np.prod(self.eigenvalues)))
