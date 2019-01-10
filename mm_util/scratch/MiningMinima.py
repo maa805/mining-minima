@@ -43,6 +43,8 @@ class MiningMinima:
 		self.scorefxn = core.scoring.ScoreFunctionFactory.create_score_function(scorefxn)
 		
 		self.min_pose = Pose()
+		self.min_pose.assign(self.input_pose)
+		
 		find_minimum(self, self.min_pose, self.scorefxn)
 		self.min_energy = self.scorefxn(self.min_pose)
 		
@@ -89,9 +91,3 @@ class MiningMinima:
 def pose_setup_from_file(pose, infile)
 
 	#TODO: Figure out how to determine whether is ss, ds, or something else and process accordingly 
-
-def find_minimum(min_pose, scorefxn, movemap)
-
-	#HMMMM maybe let user specify a particular minmover, otherwise just setup a default minmover? we'll worry about this later
-		minmover = MinMover(
-	
