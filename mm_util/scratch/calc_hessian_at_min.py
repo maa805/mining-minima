@@ -1,16 +1,21 @@
 import numpy as np
 import itertools
-import hessian
-
-def calculate_hessian(pose_min, scorefxn, dof_dict):
+from hessian import numpy_hessian
+from pyrosetta import *
+from pyrosetta.rosetta import *
+init()
+def calc_hessian_at_min(pose_min, scorefxn, dof_dict):
     '''Take a minimized pose and computes the hessian at the base of the corresponding energy well.
 	Returns the hessian matrix which may subsequently be diagonalized'''
-
+    print dof_dict
     h = 0.1
     h_rad = h*np.pi/180
-    E_0 = scorefxn(pose)
+    E_0 = scorefxn(pose_min)
 
-    dofs = [pose_min.torsion(dof_dict[key] for key in dof_dict]
+    pose = Pose()
+    pose.assign(pose_min)
+
+    dofs = [pose_min.torsion(dof_dict[key]) for key in dof_dict]
 
     hessian_at_min = np.zeros((len(dofs), len(dofs)))
 
@@ -44,7 +49,7 @@ def calculate_hessian(pose_min, scorefxn, dof_dict):
 
             pose.set_torsion(dof_dict[pair[0]], dofs[foo])
 
-        hess = hessian(energy, h_rad)
+        hess = numpy_hessian(energy, h_rad)
 
         d2E_dx2 =  hess[0,0,:,:]
         d2E_dy2 =  hess[1,1,:,:]

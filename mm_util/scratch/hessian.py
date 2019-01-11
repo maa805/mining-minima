@@ -1,3 +1,5 @@
+import numpy as np
+
 def numpy_hessian(x, h):
         
     x_grad = np.gradient(x, h)
