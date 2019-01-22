@@ -24,3 +24,8 @@ def add_chi_dofs(n_residues, idx,  movemap, dof_dict):
 		movemap.set(TorsionID(ii + 1, CHI, 1), True)
 		
 	return movemap, dof_dict
+	
+def add_rigid_bodd_dofs(movemap, dof_dict):
+
+
+	return 
