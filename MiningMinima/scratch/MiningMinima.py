@@ -148,6 +148,7 @@ class MiningMinima:
 		
 		ensemble = np.random.multivariate_nonrmal(mu, cov, size=(n_struct))
 		
+		return ensemble
 #def pose_setup_from_file(pose, infile)
 #
 #	#TODO: Figure out how to determine whether is ss, ds, or something else and process accordingly 
