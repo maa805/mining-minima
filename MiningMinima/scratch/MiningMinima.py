@@ -133,9 +133,21 @@ class MiningMinima:
 		kt = 1.0
 		self.harmonic_free_energy = (self.min_energy - 0.5*self.kt*self.n_dofs*np.log(2*np.pi*self.kt) + 0.5*self.kt*np.log(np.prod(self.eigenvalues)))
 	
-	def harmonic_ensemble(self):
+	def harmonic_ensemble(self, n_struct=200):
+		'''
 		
-		return
+		Parameters
+		--------------------
+		n_struct:	Number of ensemble members to generate
+		'''
+		
+		ensemble = np.zeros(self.n_dofs, n_struct)
+		
+		mu = [self.min_pose.torsion(self.dof_dict[key]) for key in self.dof_dict]
+		cov = np.linalg.inv(self.hessian)
+		
+		ensemble = np.random.multivariate_nonrmal(mu, cov, size=(n_struct))
+		
 #def pose_setup_from_file(pose, infile)
 #
 #	#TODO: Figure out how to determine whether is ss, ds, or something else and process accordingly 
