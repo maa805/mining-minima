@@ -20,7 +20,7 @@ def add_chi_dofs(n_residues, idx,  movemap, dof_dict):
 
 	for ii in range(n_residues):
 	
-		dof_dict.update({5*(idx - 1) + ii: TorsionID(ii + 1, CHI, 1)})
+		dof_dict.update({5*(idx) + ii: TorsionID(ii + 1, CHI, 1)})
 		movemap.set(TorsionID(ii + 1, CHI, 1), True)
 		
 	return movemap, dof_dict

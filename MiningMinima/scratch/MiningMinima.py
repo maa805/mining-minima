@@ -35,7 +35,7 @@ class MiningMinima:
 		if not infile: 
 			
 			self.seq1 = seq1
-			if seq2: self.seq2 = seq2
+			self.seq2 = seq2
 			
 		else: self.infile = infile
 		
@@ -66,7 +66,8 @@ class MiningMinima:
 
 	def pose_setup_turner(self):
 		
-		n_residues = len(self.seq1 + self.seq2)
+		n_residues = len(self.seq1)
+		if self.seq2: n_residues += len(self.seq2)
 		
 		dof_dict = {}
 		movemap = MoveMap()
@@ -130,7 +131,7 @@ class MiningMinima:
 		self.anharmonic_free_energy = self.min_energy - self.kt*np.log(total_partition)
 
 	def calc_harmonic_free_energy(self):
-		kt = 1.0
+		
 		self.harmonic_free_energy = (self.min_energy - 0.5*self.kt*self.n_dofs*np.log(2*np.pi*self.kt) + 0.5*self.kt*np.log(np.prod(self.eigenvalues)))
 	
 	def harmonic_ensemble(self, n_struct=200):
@@ -141,12 +142,12 @@ class MiningMinima:
 		n_struct:	Number of ensemble members to generate
 		'''
 		
-		ensemble = np.zeros(self.n_dofs, n_struct)
+		ensemble = np.zeros((self.n_dofs, n_struct))
 		
 		mu = [self.min_pose.torsion(self.dof_dict[key]) for key in self.dof_dict]
-		cov = np.linalg.inv(self.hessian)
+		cov = np.matmul( np.matmul( self.modes, np.diag(1/self.eigenvalues)), self.modes.T)*(180./np.pi)**2	
 		
-		ensemble = np.random.multivariate_nonrmal(mu, cov, size=(n_struct))
+		ensemble = np.random.multivariate_normal(mu, cov, size=(n_struct))
 		
 		return ensemble
 #def pose_setup_from_file(pose, infile)
