@@ -25,7 +25,13 @@ def add_chi_dofs(n_residues, idx,  movemap, dof_dict):
 		
 	return movemap, dof_dict
 	
-def add_rigid_bodd_dofs(movemap, dof_dict):
+def add_rigid_body_dofs(movemap, dof_dict):
 
-
+	dof_dict.update({
+					-1: numeric.xyz_Vector_double_t(1,0,0), -2: numeric.xyz_Vector_double_t(0,1,0},
+					-3: numeric.xyz_Vector_double_t(0,0,1), -4: numeric.xyz_Vector_double_t(1,0,0),
+					-5: numeric.xyz_Vector_double_t(0,1,0), -6: numeric.xyz_Vector_double_t(0,0,1)})
+	
+	movemap.set_jump(1, True)
+	
 	return 
