@@ -32,16 +32,16 @@ class MiningMinima:
 		self.anharmonic_free_energy = 0.0
 		KT_IN_KCAL = 0.6163
 		
+		self.input_pose = Pose()
 		if not infile: 
 			
 			self.seq1 = seq1
 			self.seq2 = seq2
+			self.pose_setup_turner()
 			
-		else: self.infile = infile
-		
-		self.input_pose = Pose()
-		self.pose_setup_turner()
-		#else: self.movemap, self.dof_dict = pose_setup_from_file(self)
+		else: 
+			self.infile = infile
+			self.pose_setup_from_file()
 		
 		self.n_dofs = len(self.dof_dict)
 		
@@ -56,6 +56,10 @@ class MiningMinima:
 		# Calculate hessian at base of minimum and normal modes
 		self.hessian = calc_hessian_at_min(self.min_pose, self.scorefxn, self.dof_dict)
 		self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
+		
+		# Function for density of states
+		self.dos = lambda E: (2.0*np.pi)**(self.n_dofs/2)*(E-self.min_energy)**(self.n_dofs/2 -1 )/scipy.special.gamma(self.n_dofs/2)/np.sqrt(np.linalg.det(self.hessian))*np.heaviside(E-self.min_energy, 0.5)
+		#self.dos = lambda E: 0.5/self.n_dofs*(2.0*np.pi*(E-self.min_energy))**(self.n_dofs/2)/scipy.special.gamma(self.n_dofs/2)/np.sqrt(np.linalg.det(self.hessian))*np.heaviside(E-self.min_energy, 0.5)
 		
 		# Calculate free energy
 		self.calc_harmonic_free_energy()
@@ -88,7 +92,8 @@ class MiningMinima:
 			movemap, dof_dict = add_bb_suite(suite, idx, movemap, dof_dict)				
 			idx += 1
 			suite += 1
-			
+		
+		print dof_dict
 			
 		
 		movemap, dof_dict = add_chi_dofs(n_residues, idx, movemap, dof_dict)
@@ -100,6 +105,34 @@ class MiningMinima:
 		
 	
 	def pose_setup_from_file(self): 
+		
+		pose = pose_from_file(self.infile)
+		
+		n_residues = len(pose.sequence())
+		ft = pose.fold_tree()
+		dof_dict = {}
+		movemap = MoveMap()
+		
+		idx = 0
+		suite = 2
+		
+		for i in range(n_residues - 1):
+		
+			if pose.fold_tree().is_cutpoint(i+1):
+			
+				suite += 1
+				
+				continue
+			
+			movemap, dof_dict = add_bb_suite(suite, idx, movemap, dof_dict)
+			idx += 1
+			suite += 1
+			
+		movemap, dof_dict = add_chi_dofs(n_residues, idx, movemap, dof_dict)
+		
+		self.input_pose.assign(pose)
+		self.movemap = movemap
+		self.dof_dict = dof_dict
 		
 		return
 		
