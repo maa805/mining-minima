@@ -107,9 +107,21 @@ class MiningMinima:
 	def pose_setup_from_file(self): 
 		
 		pose = pose_from_file(self.infile)
-		
+
 		n_residues = len(pose.sequence())
+
 		ft = pose.fold_tree()
+		ft.clear()
+		ft.add_edge(1, n_residues/2, -1)
+		ft.add_edge(1, n_residues, 1)
+		
+		# use usual chi torsion atoms to set jump
+		ft.set_jump_atoms(1, pose.residue(1).atom_name(pose.residue(1).chi_atoms(1)[4]),
+		pose.residue(4).atom_name(pose.residue(4).chi_atoms(1)[4]))
+		
+		ft.add_edge(n_residues, n_residues/2 + 1, -1)
+		pose.fold_tree(ft)
+		
 		dof_dict = {}
 		movemap = MoveMap()
 		
