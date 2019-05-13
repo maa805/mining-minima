@@ -7,8 +7,10 @@ init()
 def calc_hessian_at_min(pose_min, scorefxn, dof_dict):
     '''Take a minimized pose and computes the hessian at the base of the corresponding energy well.
 	Returns the hessian matrix which may subsequently be diagonalized'''
-    print dof_dict
+	
     h = 0.1
+    sig = 0.6
+	
     h_rad = h*np.pi/180
     E_0 = scorefxn(pose_min)
 
@@ -19,7 +21,7 @@ def calc_hessian_at_min(pose_min, scorefxn, dof_dict):
 
     hessian_at_min = np.zeros((len(dofs), len(dofs)))
 
-    n_pts = int(1/h + 1)
+    n_pts = int(sig/h + 1)
     ind = int(n_pts/2)
 
     tor_ranges = np.zeros((n_pts, len(dofs)))
@@ -27,7 +29,7 @@ def calc_hessian_at_min(pose_min, scorefxn, dof_dict):
 
     for ii, dof in enumerate(dofs):
 
-        tor_ranges[:, ii] = dof + np.arange(-0.5, 0.5+h, h)
+        tor_ranges[:, ii] = dof + np.linspace(-sig/2, sig/2, n_pts)
 
     for pair in list(itertools.combinations(dof_dict.keys(), 2)):
 

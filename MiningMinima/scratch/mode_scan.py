@@ -25,7 +25,7 @@ def mode_scan(min_pose, mode, scorefxn, dof_dict, h = 1.0, range = 60.0, kt = 1.
 	result = np.array([])
 	
 	# h is in degrees to match rosetta movers
-	h = np.arange(-range, range+h, h)
+	h = np.linspace(-range, range, 2*range/h + 1)
 	
 	# Scan along mode at indicated granularity 
 	for hh in h:

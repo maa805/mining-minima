@@ -1,5 +1,6 @@
 import numpy as np
 import scipy
+import scipy.special
 import itertools
 
 from pyrosetta import *
@@ -91,10 +92,7 @@ class MiningMinima:
 			
 			movemap, dof_dict = add_bb_suite(suite, idx, movemap, dof_dict)				
 			idx += 1
-			suite += 1
-		
-		print dof_dict
-			
+			suite += 1			
 		
 		movemap, dof_dict = add_chi_dofs(n_residues, idx, movemap, dof_dict)
 
@@ -110,16 +108,12 @@ class MiningMinima:
 
 		n_residues = len(pose.sequence())
 
-		ft = pose.fold_tree()
-		ft.clear()
-		ft.add_edge(1, n_residues/2, -1)
-		ft.add_edge(1, n_residues, 1)
-		
+		ft = FoldTree(n_residues)
+		ft.new_jump(1, n_residues, n_residues/2)
 		# use usual chi torsion atoms to set jump
 		ft.set_jump_atoms(1, pose.residue(1).atom_name(pose.residue(1).chi_atoms(1)[4]),
-		pose.residue(4).atom_name(pose.residue(4).chi_atoms(1)[4]))
+			pose.residue(n_residues).atom_name(pose.residue(n_residues).chi_atoms(1)[4]))
 		
-		ft.add_edge(n_residues, n_residues/2 + 1, -1)
 		pose.fold_tree(ft)
 		
 		dof_dict = {}

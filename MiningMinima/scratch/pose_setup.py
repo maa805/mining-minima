@@ -24,6 +24,11 @@ def add_chi_dofs(n_residues, idx,  movemap, dof_dict):
 		movemap.set(TorsionID(ii + 1, CHI, 1), True)
 		
 	return movemap, dof_dict
+
+def add_2primeOH_dof(res, movemap, dof_dict):
+	
+	dof_dict.update({len(dof_dict): TorsionID(ii + 1, CHI, 4)})
+	movemap.set(TorsionID(res, CHI, 4), True)
 	
 #def add_rigid_body_dofs(movemap, dof_dict):
 ##
