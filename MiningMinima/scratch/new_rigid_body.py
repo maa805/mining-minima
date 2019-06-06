@@ -226,3 +226,11 @@ def rb_mode_scan(min_pose, rb_movers, mode, scorefxn, h = 0.02, w = 6.0, kt = 1.
 	partition_function = np.trapz( np.exp( -( np.array(result) - scorefxn(min_pose) )/kt ), dx=h)
 	
 	return partition_function, result
+	
+def rb_harmonic_ensemble(min_pose, modes, eigenvalues, n_struct=200):
+
+	ensemble = np.zeros((6,n_struct))
+	mu = np.zeros(6)
+	cov = np.matmul( np.matmul( modes, np.diag(1/eigenvalues)), modes.T)
+	ensemble = np.random.multivariate_normal(mu, cov, size=(200))
+	
