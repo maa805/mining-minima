@@ -1,12 +1,10 @@
 from pyrosetta import *
 from pyrosetta.rosetta import *
 from pyrosetta.rosetta.core.id import *
-init()
 # If necesarry, pose_setup_turner can revert to pose_setup_turner_ss and remove legacy to get parent 
 # function
 
 def add_bb_suite(suite, idx, movemap, dof_dict):
-
 	dof_dict.update({
 					5*idx: TorsionID(suite-1, BB, 5),5*idx+1: TorsionID(suite-1, BB, 6),
 					5*idx+2: TorsionID(suite, BB, 1),5*idx+3: TorsionID(suite, BB, 2),  
@@ -17,7 +15,6 @@ def add_bb_suite(suite, idx, movemap, dof_dict):
 	return movemap, dof_dict
 	
 def add_chi_dofs(n_residues, idx,  movemap, dof_dict):
-
 	for ii in range(n_residues):
 	
 		dof_dict.update({5*(idx) + ii: TorsionID(ii + 1, CHI, 1)})
@@ -26,7 +23,6 @@ def add_chi_dofs(n_residues, idx,  movemap, dof_dict):
 	return movemap, dof_dict
 
 def add_2primeOH_dof(res, movemap, dof_dict):
-	
 	dof_dict.update({len(dof_dict): TorsionID(ii + 1, CHI, 4)})
 	movemap.set(TorsionID(res, CHI, 4), True)
 	

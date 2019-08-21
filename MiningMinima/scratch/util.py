@@ -4,10 +4,8 @@ def is_pos_def(x):
     return np.all(np.linalg.eigvals(x) > 0)
 
 def within_360(dof):
-    
     diff = dof/360.0
     diff = np.round(diff)
-    
     return dof - 360.0*diff
 	
 def is_repeat_minimum(new_dofs, dof_lists):
