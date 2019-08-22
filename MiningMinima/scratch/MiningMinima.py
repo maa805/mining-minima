@@ -36,16 +36,15 @@ class MiningMinima:
         self.scorefxn = core.scoring.ScoreFunctionFactory.create_score_function(scorefxn)
 		
         # set up the multifunc and associated acts
-        self.set_up_multifunc()
-        
-        # find the min_dofs
         self.min_pose = Pose()
         self.min_pose.assign(self.input_pose)
-		
-        #self.find_minimum()
+        self.set_up_multifunc(self.min_pose)
+        
+        # find the min_dofs
+        self.find_minimum()
         self.min_energy = self.scorefxn(self.min_pose)
-		
-		# Calculate hessian at base of minimum and normal modes
+        
+        # Calculate hessian at base of minimum and normal modes
         #self.hessian = calc_hessian_at_min(self.min_pose, self.scorefxn, self.dof_dict)
         #self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
 		
@@ -85,92 +84,110 @@ class MiningMinima:
         self.dof_dict = dof_dict
 		
 	
-	def pose_setup_from_file(self): 
-		pose = pose_from_file(self.infile)
-		n_residues = len(pose.sequence())
-
-		ft = FoldTree(n_residues)
-		ft.new_jump(1, n_residues, n_residues/2)
-		# use usual chi torsion atoms to set jump
-		ft.set_jump_atoms(1, pose.residue(1).atom_name(pose.residue(1).chi_atoms(1)[4]),
-			pose.residue(n_residues).atom_name(pose.residue(n_residues).chi_atoms(1)[4]))
+    def pose_setup_from_file(self): 
+        pose = pose_from_file(self.infile)
+        n_residues = len(pose.sequence())
+        
+        ft = FoldTree(n_residues)
+        ft.new_jump(1, n_residues, n_residues/2)
+        # use usual chi torsion atoms to set jump
+        ft.set_jump_atoms(1, pose.residue(1).atom_name(pose.residue(1).chi_atoms(1)[4]),
+            pose.residue(n_residues).atom_name(pose.residue(n_residues).chi_atoms(1)[4]))
 		
-		pose.fold_tree(ft)
+        pose.fold_tree(ft)
+	
+        dof_dict = {}
+        movemap = MoveMap()
 		
-		dof_dict = {}
-		movemap = MoveMap()
+        idx = 0
+        suite = 2
 		
-		idx = 0
-		suite = 2
+        for i in range(n_residues - 1):
 		
-		for i in range(n_residues - 1):
-		
-			if pose.fold_tree().is_cutpoint(i+1):
+            if pose.fold_tree().is_cutpoint(i+1):
+                suite += 1
+                continue
 			
-				suite += 1
-				
-				continue
+            movemap, dof_dict = add_bb_suite(suite, idx, movemap, dof_dict)
+            idx += 1
+            suite += 1
 			
-			movemap, dof_dict = add_bb_suite(suite, idx, movemap, dof_dict)
-			idx += 1
-			suite += 1
-			
-		movemap, dof_dict = add_chi_dofs(n_residues, idx, movemap, dof_dict)
+        movemap, dof_dict = add_chi_dofs(n_residues, idx, movemap, dof_dict)
 		
-		self.input_pose.assign(pose)
-		self.movemap = movemap
-		self.dof_dict = dof_dict
+        self.input_pose.assign(pose)
+        self.movemap = movemap
+        self.dof_dict = dof_dict
 		
-		return
+        return
 		
 	#def calc_hessian_at_min(self, self.min_pose, self.scorefxn, self.dof_dict)
 	
 	
 	#def mode_scan(self, self.min_pose, self.scorefxn, self.dof_dict) 
 	
-    def set_up_multifunc(self):
+    def set_up_multifunc(self, pose):
         # set up minimizer map
         min_map = core.optimization.MinimizerMap()
-        min_map.setup(self.input_pose,self.movemap)
+        min_map.setup(pose,self.movemap)
         
-        start_score = self.scorefxn(self.input_pose)
-        self.input_pose.energies().set_use_nblist(self.input_pose,min_map.domain_map(),True)
-        multifunc = core.optimization.AtomTreeMultifunc(self.input_pose,min_map,self.scorefxn)
-        self.scorefxn.setup_for_minimizing(self.input_pose,min_map)
-        self.scorefxn.setup_for_derivatives(self.input_pose)
+        start_score = self.scorefxn(pose)
+        self.input_pose.energies().set_use_nblist(pose,min_map.domain_map(),True)
+        multifunc = core.optimization.AtomTreeMultifunc(pose,min_map,self.scorefxn)
+        self.scorefxn.setup_for_minimizing(pose,min_map)
+        self.scorefxn.setup_for_derivatives(pose)
    
         self.min_map = min_map
         self.multifunc = multifunc
-        
+
     def find_minimum(self):
-        '''Minimizes an input pose using indicated scorefunction and movemap''' 
-        minmover = rosetta.protocols.minimization_packing.MinMover(
-            self.movemap, self.scorefxn,'lbfgs_armijo_nonmonotone', 1.0e-7, True)
-        minmover.max_iter(1000000)
-        minmover.min_options().use_nblist(True)
-        minmover.min_options().nblist_auto_update(True)
+        # set min options
+        min_options = core.optimization.MinimizerOptions(
+            'lbfgs_armijo_nonmonotone', 1e-15, True, False, False)
+        min_options.use_nblist(True)
+        min_options.nblist_auto_update(True) # for some reason off by default 
+        print min_options.use_nblist()
+        print min_options.nblist_auto_update()
+        # initialize min_dofs and gradient containers
+        min_dofs = Vector1([0.0]*self.n_dofs)
+            
+        # get dofs from pose
+        self.min_map.copy_dofs_from_pose(self.min_pose, min_dofs)
+            
+        # set up minimizer and run
+        minimizer = core.optimization.Minimizer(self.multifunc, min_options)
+        for _ in range(1): minimizer.run(min_dofs)
+            
+        return np.array(min_dofs)
+ 
+# Older version of find_minimum using minmover  
+#    def find_minimum(self):
+#        '''Minimizes an input pose using indicated scorefunction and movemap''' 
+#        minmover = rosetta.protocols.minimization_packing.MinMover(
+#            self.movemap, self.scorefxn,'lbfgs_armijo_nonmonotone', 1.0e-7, True)
+#        minmover.max_iter(1000000)
+#        minmover.min_options().use_nblist(True)
+#        minmover.min_options().nblist_auto_update(True)
+#		
+#        minmover.apply(self.min_pose)
+#        self.min_map.setup(self.min_pose,self.movemap)
+#        self.min_pose.energies().set_use_nblist(self.min_pose,self.min_map.domain_map(),True)
+#        self.scorefxn.setup_for_minimizing(self.min_pose,self.min_map)
+#        self.scorefxn.setup_for_derivatives(self.min_pose)
 		
-        minmover.apply(self.min_pose)
-        self.min_map.setup(self.min_pose,self.movemap)
-        self.min_pose.energies().set_use_nblist(self.min_pose,self.min_map.domain_map(),True)
-        self.scorefxn.setup_for_minimizing(self.min_pose,self.min_map)
-        self.scorefxn.setup_for_derivatives(self.min_pose)
-		
-	def calc_anharmonic_free_energy(self):
-		total_partition = 1.0
+    def calc_anharmonic_free_energy(self):
+        total_partition = 1.0
 	
-		for i in range(self.n_dofs): 
-			mode_partition, _ = mode_scan(self.min_pose, self.modes[:,i], self.scorefxn, self.dof_dict)
-			total_partition *= mode_partition
-			
-		self.anharmonic_free_energy = self.min_energy - self.kt*np.log(total_partition)
+        for i in range(self.n_dofs): 
+            mode_partition, _ = mode_scan(self.min_pose, self.modes[:,i], self.scorefxn, self.dof_dict)
+            total_partition *= mode_partition
+        
+        self.anharmonic_free_energy = self.min_energy - self.kt*np.log(total_partition)
 
 	def calc_harmonic_free_energy(self):
 		self.harmonic_free_energy = (self.min_energy - 0.5*self.kt*self.n_dofs*np.log(2*np.pi*self.kt) + 0.5*self.kt*np.log(np.prod(self.eigenvalues)))
 	
 	def harmonic_ensemble(self, n_struct=200):
 		'''
-		
 		Parameters
 		--------------------
 		n_struct:	Number of ensemble members to generate
