@@ -41,11 +41,11 @@ class MiningMinima:
         self.set_up_multifunc(self.min_pose)
         
         # find the min_dofs
-        self.find_minimum()
+        self.min_dofs = self.find_minimum()
         self.min_energy = self.scorefxn(self.min_pose)
         
         # Calculate hessian at base of minimum and normal modes
-        #self.hessian = calc_hessian_at_min(self.min_pose, self.scorefxn, self.dof_dict)
+        self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
         #self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
 		
 		# Function for density of states
@@ -156,9 +156,12 @@ class MiningMinima:
         # set up minimizer and run
         minimizer = core.optimization.Minimizer(self.multifunc, min_options)
         for _ in range(1): minimizer.run(min_dofs)
-            
+        
+        # copy new min dofs to min pose
+        self.min_map.copy_dofs_to_pose(self.min_pose, min_dofs)
         return np.array(min_dofs)
- 
+    
+    
 # Older version of find_minimum using minmover  
 #    def find_minimum(self):
 #        '''Minimizes an input pose using indicated scorefunction and movemap''' 
@@ -200,3 +203,22 @@ class MiningMinima:
 		ensemble = np.random.multivariate_normal(mu, cov, size=(n_struct))
 		
 		return ensemble
+        
+def hessian_at_min(min_dofs, multifunc, h=1e-5):
+    min_dofs = np.array(min_dofs) # take advantage of numpy indexing
+    n_dofs = len(min_dofs)
+    hessian = np.zeros((n_dofs,n_dofs))
+    plus = Vector1([0.0]*n_dofs)
+    minus = Vector1([0.0]*n_dofs)
+    
+    for ii in range(n_dofs):
+        new_dofs = min_dofs[:]
+        new_dofs[ii] += h*180./np.pi # dofs in degrees
+        multifunc.dfunc(Vector1(new_dofs), plus)
+        new_dofs[ii] -= 2.*h*180./np.pi
+        multifunc.dfunc(Vector1(list(new_dofs)), minus)
+        
+        #cetnral difference scheme
+        hessian[ii] = (np.array(plus) - np.array(minus))/2./h
+        
+    return 0.5*(hessian + hessian.T) # enforce symmetry
