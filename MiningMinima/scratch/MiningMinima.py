@@ -5,11 +5,10 @@ import itertools
 
 from pyrosetta import *
 from pyrosetta.rosetta import *
+init()
 
 from pose_setup import add_bb_suite
 from pose_setup import add_chi_dofs
-from calc_hessian_at_min import *
-from mode_scan import *
 
 KT_IN_KCAL = 0.6163
 
@@ -145,8 +144,7 @@ class MiningMinima:
             'lbfgs_armijo_nonmonotone', 1e-15, True, False, False)
         min_options.use_nblist(True)
         min_options.nblist_auto_update(True) # for some reason off by default 
-        print min_options.use_nblist()
-        print min_options.nblist_auto_update()
+        
         # initialize min_dofs and gradient containers
         min_dofs = Vector1([0.0]*self.n_dofs)
             
@@ -204,7 +202,7 @@ class MiningMinima:
 		
 		return ensemble
         
-def hessian_at_min(min_dofs, multifunc, h=1e-5):
+def hessian_at_min(min_dofs, multifunc, h=1e-3):
     min_dofs = np.array(min_dofs) # take advantage of numpy indexing
     n_dofs = len(min_dofs)
     hessian = np.zeros((n_dofs,n_dofs))
@@ -214,11 +212,42 @@ def hessian_at_min(min_dofs, multifunc, h=1e-5):
     for ii in range(n_dofs):
         new_dofs = min_dofs[:]
         new_dofs[ii] += h*180./np.pi # dofs in degrees
-        multifunc.dfunc(Vector1(new_dofs), plus)
+        multifunc.dfunc(Vector1(list(new_dofs)), plus)
         new_dofs[ii] -= 2.*h*180./np.pi
         multifunc.dfunc(Vector1(list(new_dofs)), minus)
         
-        #cetnral difference scheme
-        hessian[ii] = (np.array(plus) - np.array(minus))/2./h
-        
+        #central difference scheme
+        row = (np.array(plus) - np.array(minus))/2./h
+        hessian[ii] = row * 180./np.pi
     return 0.5*(hessian + hessian.T) # enforce symmetry
+    
+    
+def mode_scan(min_dofs, multifunc, mode, limit=np.pi/3, dx=0.005):
+    # convert to np array for useful indexing
+    min_dofs = np.array(min_dofs)
+    displacement_array = np.linspace(-limit, limit, int(2*limit/dx)+1)
+    
+    result = np.zeros_like(displacement_array)
+    
+    for ii, displacement in enumerate(displacement_array):
+        new_dofs = min_dofs[:] + displacement*mode*180./np.pi
+        result[ii] = multifunc(Vector1(list(new_dofs)))
+ 
+    return result
+ 
+ 
+def compute_total_partition(min_dofs, multifunc, modes, eigenvalues, limit=np.pi/3, dx=0.005):
+    total_log_partition = 0.
+    total_log_harmonic = 0.
+    scans = tuple()
+    xx = linspace(-limit, limit, int(2*limit/dx)+1)
+    min_energy = multifunc(min_dofs)
+
+    for ii, mode in enumerate(modes.T):      # columns of array are eigenvectors
+        result = mode_scan(min_dofs, multifunc, mode, limit=limit, dx=dx)
+        result -= min_energy                 # energy is relative to base of well
+        scans = scans + (result,)
+        total_log_partition += np.log(np.trapz(np.exp(-result),dx=dx))
+        total_log_harmonic += np.log(np.sqrt(2*np.pi/eigenvalues[ii])*erf(1))
+
+    return 0
