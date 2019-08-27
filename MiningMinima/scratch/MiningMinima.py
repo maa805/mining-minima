@@ -226,9 +226,9 @@ def mode_scan(min_dofs, multifunc, mode, limit=np.pi/3, dx=0.005):
     # convert to np array for useful indexing
     min_dofs = np.array(min_dofs)
     displacement_array = np.linspace(-limit, limit, int(2*limit/dx)+1)
-    
     result = np.zeros_like(displacement_array)
     
+    new_dofs = np.array(min_dofs)
     for ii, displacement in enumerate(displacement_array):
         new_dofs = min_dofs[:] + displacement*mode*180./np.pi
         result[ii] = multifunc(Vector1(list(new_dofs)))
