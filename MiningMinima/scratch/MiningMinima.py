@@ -237,17 +237,19 @@ def mode_scan(min_dofs, multifunc, mode, limit=np.pi/3, dx=0.005):
  
  
 def compute_total_partition(min_dofs, multifunc, modes, eigenvalues, limit=np.pi/3, dx=0.005):
+    from scipy.special import erf
+    
     total_log_partition = 0.
     total_log_harmonic = 0.
     scans = tuple()
-    xx = linspace(-limit, limit, int(2*limit/dx)+1)
-    min_energy = multifunc(min_dofs)
+    xx = np.linspace(-limit, limit, int(2*limit/dx)+1)
+    min_energy = multifunc(Vector1(list(min_dofs)))
 
     for ii, mode in enumerate(modes.T):      # columns of array are eigenvectors
         result = mode_scan(min_dofs, multifunc, mode, limit=limit, dx=dx)
         result -= min_energy                 # energy is relative to base of well
         scans = scans + (result,)
         total_log_partition += np.log(np.trapz(np.exp(-result),dx=dx))
-        total_log_harmonic += np.log(np.sqrt(2*np.pi/eigenvalues[ii])*erf(1))
+        total_log_harmonic += np.log(np.sqrt(2*np.pi/eigenvalues[ii])*erf(2*limit/np.sqrt(2/eigenvalues[ii])))
 
-    return 0
+    return total_log_partition, total_log_harmonic, scans
