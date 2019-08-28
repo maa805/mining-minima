@@ -158,22 +158,7 @@ class MiningMinima:
         # copy new min dofs to min pose
         self.min_map.copy_dofs_to_pose(self.min_pose, min_dofs)
         return np.array(min_dofs)
-    
-    
-# Older version of find_minimum using minmover  
-#    def find_minimum(self):
-#        '''Minimizes an input pose using indicated scorefunction and movemap''' 
-#        minmover = rosetta.protocols.minimization_packing.MinMover(
-#            self.movemap, self.scorefxn,'lbfgs_armijo_nonmonotone', 1.0e-7, True)
-#        minmover.max_iter(1000000)
-#        minmover.min_options().use_nblist(True)
-#        minmover.min_options().nblist_auto_update(True)
-#		
-#        minmover.apply(self.min_pose)
-#        self.min_map.setup(self.min_pose,self.movemap)
-#        self.min_pose.energies().set_use_nblist(self.min_pose,self.min_map.domain_map(),True)
-#        self.scorefxn.setup_for_minimizing(self.min_pose,self.min_map)
-#        self.scorefxn.setup_for_derivatives(self.min_pose)
+
 		
     def calc_anharmonic_free_energy(self):
         total_partition = 1.0
@@ -203,7 +188,7 @@ class MiningMinima:
 		return ensemble
         
 def hessian_at_min(min_dofs, multifunc, h=1e-3):
-    min_dofs = np.array(min_dofs) # take advantage of numpy indexing
+    min_dofs = np.array(min_dofs) # take advantage of numpy indexing/slicing
     n_dofs = len(min_dofs)
     hessian = np.zeros((n_dofs,n_dofs))
     plus = Vector1([0.0]*n_dofs)
@@ -230,8 +215,8 @@ def mode_scan(min_dofs, multifunc, mode, limit=np.pi/3, dx=0.005):
     
     new_dofs = np.array(min_dofs)
     for ii, displacement in enumerate(displacement_array):
-        new_dofs = min_dofs[:] + displacement*mode*180./np.pi
-        result[ii] = multifunc(Vector1(list(new_dofs)))
+        new_dofs = min_dofs[:] + displacement*mode*180./np.pi # dofs are in degrees
+        result[ii] = multifunc(array_to_vector1(new_dofs))
  
     return result
  
@@ -243,14 +228,15 @@ def compute_total_partition(min_dofs, multifunc, modes, eigenvalues, limit=np.pi
     total_log_harmonic = 0.
     scans = tuple()
     xx = np.linspace(-limit, limit, int(2*limit/dx)+1)
-    min_energy = multifunc(Vector1(list(min_dofs)))
+    min_energy = multifunc(array_to_vector1(min_dofs))
 
     for ii, mode in enumerate(modes.T):      # columns of array are eigenvectors
         result = mode_scan(min_dofs, multifunc, mode, limit=limit, dx=dx)
         result -= min_energy                 # energy is relative to base of well
         scans = scans + (result,)
         total_log_partition += np.log(np.trapz(np.exp(-result),dx=dx))
-        total_log_harmonic += np.log(np.sqrt(2*np.pi/eigenvalues[ii])*erf(2*limit/np.sqrt(2/eigenvalues[ii])))
+        total_log_harmonic += np.log(np.sqrt(2*np.pi/eigenvalues[ii]) # see Gilson et al. PNAS 2003
+            *erf(2*limit/np.sqrt(2/eigenvalues[ii])))
 
     return total_log_partition, total_log_harmonic, scans
     
