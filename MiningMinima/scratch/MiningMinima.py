@@ -45,7 +45,7 @@ class MiningMinima:
         
         # Calculate hessian at base of minimum and normal modes
         self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
-        #self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
+        self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
 		
 		# Function for density of states
         #self.dos = lambda E: (2.0*np.pi)**(self.n_dofs/2)*(E-self.min_energy)**(self.n_dofs/2 -1 )/scipy.special.gamma(self.n_dofs/2)/np.sqrt(np.linalg.det(self.hessian))*np.heaviside(E-self.min_energy, 0.5)
@@ -253,3 +253,7 @@ def compute_total_partition(min_dofs, multifunc, modes, eigenvalues, limit=np.pi
         total_log_harmonic += np.log(np.sqrt(2*np.pi/eigenvalues[ii])*erf(2*limit/np.sqrt(2/eigenvalues[ii])))
 
     return total_log_partition, total_log_harmonic, scans
+    
+def array_to_vector1(array):
+    vector_from_array = Vector1(list(array))
+    return vector_from_array
