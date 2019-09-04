@@ -1,6 +1,6 @@
 import numpy as np
 import scipy
-import scipy.special
+from scipy.special import erf, gamma
 import itertools
 
 from pyrosetta import *
@@ -21,7 +21,6 @@ class MiningMinima:
 		
         self.input_pose = Pose()
         if not infile: 
-			
             self.seq1 = seq1
             self.seq2 = seq2
             self.pose_setup_turner()
@@ -45,15 +44,17 @@ class MiningMinima:
         
         # Calculate hessian at base of minimum and normal modes
         self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
+        for ii, node in enumerate(self.min_map.dof_nodes()):
+            self.hessian[ii] *= self.min_map.torsion_scale_factor(node)
+            
         self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
 		
 		# Function for density of states
-        #self.dos = lambda E: (2.0*np.pi)**(self.n_dofs/2)*(E-self.min_energy)**(self.n_dofs/2 -1 )/scipy.special.gamma(self.n_dofs/2)/np.sqrt(np.linalg.det(self.hessian))*np.heaviside(E-self.min_energy, 0.5)
-		#self.dos = lambda E: 0.5/self.n_dofs*(2.0*np.pi*(E-self.min_energy))**(self.n_dofs/2)/scipy.special.gamma(self.n_dofs/2)/np.sqrt(np.linalg.det(self.hessian))*np.heaviside(E-self.min_energy, 0.5)
+        self.dos = lambda E: (2.0*np.pi)**(self.n_dofs/2)*(E-self.min_energy)**(self.n_dofs/2 - 1)/gamma(self.n_dofs/2)/np.sqrt(np.linalg.det(self.hessian))*np.heaviside(E-self.min_energy, 0.5)
 		
-		# Calculate free energy
+		# Calculate free energy 
+        self.calc_anharmonic_free_energy()
         #self.calc_harmonic_free_energy()
-        #self.calc_anharmonic_free_energy()
         
     def pose_setup_turner(self):
         n_residues = len(self.seq1)
@@ -127,14 +128,13 @@ class MiningMinima:
     def set_up_multifunc(self, pose):
         # set up minimizer map
         min_map = core.optimization.MinimizerMap()
-        min_map.setup(pose,self.movemap)
+        min_map.setup(pose, self.movemap)
         
         start_score = self.scorefxn(pose)
         self.input_pose.energies().set_use_nblist(pose,min_map.domain_map(),True)
-        multifunc = core.optimization.AtomTreeMultifunc(pose,min_map,self.scorefxn)
-        self.scorefxn.setup_for_minimizing(pose,min_map)
-        self.scorefxn.setup_for_derivatives(pose)
-   
+        multifunc = core.optimization.AtomTreeMultifunc(pose, min_map, self.scorefxn)
+
+        # values to return 
         self.min_map = min_map
         self.multifunc = multifunc
 
@@ -142,6 +142,12 @@ class MiningMinima:
         # set min options
         min_options = core.optimization.MinimizerOptions(
             'lbfgs_armijo_nonmonotone', 1e-15, True, False, False)
+        min_options.max_iter(1000000000)
+        start_score = self.scorefxn(self.min_pose)
+        self.min_pose.energies().set_use_nblist(self.min_pose, self.min_map.domain_map(), True)
+        self.scorefxn.setup_for_minimizing(self.min_pose, self.min_map)
+        self.scorefxn.setup_for_derivatives(self.min_pose)
+   
         min_options.use_nblist(True)
         min_options.nblist_auto_update(True) # for some reason off by default 
         
@@ -161,16 +167,11 @@ class MiningMinima:
 
 		
     def calc_anharmonic_free_energy(self):
-        total_partition = 1.0
-	
-        for i in range(self.n_dofs): 
-            mode_partition, _ = mode_scan(self.min_pose, self.modes[:,i], self.scorefxn, self.dof_dict)
-            total_partition *= mode_partition
-        
-        self.anharmonic_free_energy = self.min_energy - self.kt*np.log(total_partition)
+        self.total_log_partition, self.total_log_harmonic, self.mode_scans = compute_total_partition(self.min_dofs, self.multifunc, self.modes, self.eigenvalues)
+        self.anharmonic_free_energy = self.min_energy - self.total_log_partition
 
-	def calc_harmonic_free_energy(self):
-		self.harmonic_free_energy = (self.min_energy - 0.5*self.kt*self.n_dofs*np.log(2*np.pi*self.kt) + 0.5*self.kt*np.log(np.prod(self.eigenvalues)))
+    def calc_harmonic_free_energy(self):
+        self.harmonic_free_energy = (self.min_energy - 0.5*self.kt*self.n_dofs*np.log(2*np.pi*self.kt) + 0.5*self.kt*np.log(np.prod(self.eigenvalues)))
 	
 	def harmonic_ensemble(self, n_struct=200):
 		'''
@@ -203,7 +204,7 @@ def hessian_at_min(min_dofs, multifunc, h=1e-3):
         
         #central difference scheme
         row = (np.array(plus) - np.array(minus))/2./h
-        hessian[ii] = row * 180./np.pi
+        hessian[ii] = row * 1.0
     return 0.5*(hessian + hessian.T) # enforce symmetry
     
     
@@ -215,8 +216,7 @@ def mode_scan(min_dofs, multifunc, mode, limit=np.pi/3, dx=0.005):
     
     new_dofs = np.array(min_dofs)
     for ii, displacement in enumerate(displacement_array):
-        new_dofs = min_dofs[:] + displacement*mode*180./np.pi # dofs are in degrees
-        result[ii] = multifunc(array_to_vector1(new_dofs))
+        result[ii] = pert_eval(displacement, min_dofs, mode, multifunc)
  
     return result
  
@@ -238,7 +238,11 @@ def compute_total_partition(min_dofs, multifunc, modes, eigenvalues, limit=np.pi
         total_log_harmonic += np.log(np.sqrt(2*np.pi/eigenvalues[ii]) # see Gilson et al. PNAS 2003
             *erf(2*limit/np.sqrt(2/eigenvalues[ii])))
 
-    return total_log_partition, total_log_harmonic, scans
+    return total_log_partition, total_log_harmonic, np.row_stack(scans)
+
+def pert_eval(pert, min_dofs, mode, multifunc):
+    new_dofs = min_dofs[:] + mode*pert*180/np.pi # dofs are in degrees
+    return multifunc(array_to_vector1(new_dofs))
     
 def array_to_vector1(array):
     vector_from_array = Vector1(list(array))
