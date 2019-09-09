@@ -1,6 +1,7 @@
 import numpy as np
 import scipy
 from scipy.special import erf, gamma
+from scipy.optimize import minimize
 import itertools
 
 from pyrosetta import *
@@ -41,6 +42,7 @@ class MiningMinima:
         # find the min_dofs
         self.min_dofs = self.find_minimum()
         self.min_energy = self.scorefxn(self.min_pose)
+        NM_minimize(self.min_dofs, self.multifunc)
         
         # Calculate hessian at base of minimum and normal modes
         self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
@@ -141,8 +143,8 @@ class MiningMinima:
     def find_minimum(self):
         # set min options
         min_options = core.optimization.MinimizerOptions(
-            'lbfgs_armijo_nonmonotone', 1e-15, True, False, False)
-        min_options.max_iter(1000000000)
+            'lbfgs_armijo_nonmonotone', 1.5e-8, True, False, False)
+        min_options.max_iter(10000)
         start_score = self.scorefxn(self.min_pose)
         self.min_pose.energies().set_use_nblist(self.min_pose, self.min_map.domain_map(), True)
         self.scorefxn.setup_for_minimizing(self.min_pose, self.min_map)
@@ -159,7 +161,7 @@ class MiningMinima:
             
         # set up minimizer and run
         minimizer = core.optimization.Minimizer(self.multifunc, min_options)
-        for _ in range(1): minimizer.run(min_dofs)
+        for _ in range(40): minimizer.run(min_dofs)
         
         # copy new min dofs to min pose
         self.min_map.copy_dofs_to_pose(self.min_pose, min_dofs)
@@ -187,8 +189,20 @@ class MiningMinima:
 		ensemble = np.random.multivariate_normal(mu, cov, size=(n_struct))
 		
 		return ensemble
-        
-def hessian_at_min(min_dofs, multifunc, h=1e-3):
+ 
+def NM_minimize(start_dofs, multifunc):
+    '''Perform Nelder-Mead minimiziation using scipy'''
+    def min_func(min_dofs, multifunc):
+        min_dofs = Vector1(list(min_dofs))
+        energy = multifunc(min_dofs)
+        return energy
+    
+    result = minimize(min_func, x0=np.array(start_dofs), args=(multifunc,), method='Nelder-Mead',
+                      options={'maxfev': 100000}, tol=1.5e-9)
+    return result.x
+    
+ 
+def hessian_at_min(min_dofs, multifunc, h=1.5e-5):
     min_dofs = np.array(min_dofs) # take advantage of numpy indexing/slicing
     n_dofs = len(min_dofs)
     hessian = np.zeros((n_dofs,n_dofs))
@@ -199,7 +213,7 @@ def hessian_at_min(min_dofs, multifunc, h=1e-3):
         new_dofs = min_dofs[:]
         new_dofs[ii] += h*180./np.pi # dofs in degrees
         multifunc.dfunc(Vector1(list(new_dofs)), plus)
-        new_dofs[ii] -= 2.*h*180./np.pi
+        new_dofs[ii] -= 2*h*180./np.pi
         multifunc.dfunc(Vector1(list(new_dofs)), minus)
         
         #central difference scheme
