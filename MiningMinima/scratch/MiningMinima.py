@@ -14,7 +14,7 @@ from pose_setup import add_chi_dofs
 KT_IN_KCAL = 0.6163
 
 class MiningMinima:	
-    def __init__(self, seq1='', seq2='', infile='', scorefxn = 'stepwise/rna/turner', kt = 1.0):
+    def __init__(self, seq1='', seq2='', infile='', scorefxn='stepwise/rna/turner', kt = 1.0):
         self.kt = kt
 		
         self.harmonic_free_energy = 0.0
@@ -33,7 +33,7 @@ class MiningMinima:
         self.n_dofs = len(self.dof_dict)
 		
         self.scorefxn = core.scoring.ScoreFunctionFactory.create_score_function(scorefxn)
-		
+
         # set up the multifunc and associated acts
         self.min_pose = Pose()
         self.min_pose.assign(self.input_pose)
@@ -42,7 +42,10 @@ class MiningMinima:
         # find the min_dofs
         self.min_dofs = self.find_minimum()
         self.min_energy = self.scorefxn(self.min_pose)
-        NM_minimize(self.min_dofs, self.multifunc)
+        
+        # perform gradient-free minimization to reduce numerical errors
+        self.gradient_free_minimize(n_cycles=100)
+        print "Minimization complete" 
         
         # Calculate hessian at base of minimum and normal modes
         self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
@@ -143,7 +146,7 @@ class MiningMinima:
     def find_minimum(self):
         # set min options
         min_options = core.optimization.MinimizerOptions(
-            'lbfgs_armijo_nonmonotone', 1.5e-8, True, False, False)
+            'lbfgs_armijo_nonmonotone', 1.5e-9, True, False, False)
         min_options.max_iter(10000)
         start_score = self.scorefxn(self.min_pose)
         self.min_pose.energies().set_use_nblist(self.min_pose, self.min_map.domain_map(), True)
@@ -161,13 +164,27 @@ class MiningMinima:
             
         # set up minimizer and run
         minimizer = core.optimization.Minimizer(self.multifunc, min_options)
-        for _ in range(40): minimizer.run(min_dofs)
+        minimizer.run(min_dofs)
         
         # copy new min dofs to min pose
         self.min_map.copy_dofs_to_pose(self.min_pose, min_dofs)
         return np.array(min_dofs)
 
-		
+    def gradient_free_minimize(self, n_cycles=0):
+        old_energy = self.min_energy
+        new_energy = 1e99
+        powell_count = 0
+        min_dofs = np.array(self.min_dofs)
+        
+        while abs(old_energy-new_energy) > 1.5e-9 and powell_count < n_cycles:
+            old_energy = new_energy
+            min_dofs, new_energy = powell_minimize(min_dofs, self.multifunc, self.n_dofs)
+            powell_count += 1
+            print new_energy
+            print abs(new_energy-old_energy)
+            
+        self.min_dofs = array_to_vector1(min_dofs) 
+    
     def calc_anharmonic_free_energy(self):
         self.total_log_partition, self.total_log_harmonic, self.mode_scans = compute_total_partition(self.min_dofs, self.multifunc, self.modes, self.eigenvalues)
         self.anharmonic_free_energy = self.min_energy - self.total_log_partition
@@ -190,16 +207,16 @@ class MiningMinima:
 		
 		return ensemble
  
-def NM_minimize(start_dofs, multifunc):
-    '''Perform Nelder-Mead minimiziation using scipy'''
+def powell_minimize(start_dofs, multifunc, ndofs=1):
+    '''Perform modified Powell minimiziation using scipy'''
     def min_func(min_dofs, multifunc):
         min_dofs = Vector1(list(min_dofs))
         energy = multifunc(min_dofs)
         return energy
     
-    result = minimize(min_func, x0=np.array(start_dofs), args=(multifunc,), method='Nelder-Mead',
-                      options={'maxfev': 100000}, tol=1.5e-9)
-    return result.x
+    result = minimize(min_func, x0=np.array(start_dofs), args=(multifunc,), method='Powell',
+                      options={'maxfev': ndofs*1000}, tol=1.5e-10)
+    return result.x, result.fun # return min_dofs (x) and funciton value (fun)
     
  
 def hessian_at_min(min_dofs, multifunc, h=1.5e-5):
