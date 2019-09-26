@@ -16,22 +16,16 @@ KT_IN_KCAL = 0.6163
 class MiningMinima:	
     def __init__(self, seq1='', seq2='', infile='', scorefxn='stepwise/rna/turner', kt = 1.0):
         self.kt = kt
-		
-        self.harmonic_free_energy = 0.0
-        self.anharmonic_free_energy = 0.0
-		
         self.input_pose = Pose()
         if not infile: 
             self.seq1 = seq1
             self.seq2 = seq2
             self.pose_setup_turner()
-			
         else: 
             self.infile = infile
             self.pose_setup_from_file()
 		
         self.n_dofs = len(self.dof_dict)
-		
         self.scorefxn = core.scoring.ScoreFunctionFactory.create_score_function(scorefxn)
 
         # set up the multifunc and associated acts
@@ -45,15 +39,31 @@ class MiningMinima:
         
         # perform gradient-free minimization to reduce numerical errors
         self.gradient_free_minimize(n_cycles=100)
-        print "Minimization complete" 
-        
+
         # Calculate hessian at base of minimum and normal modes
-        self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
-        for ii, node in enumerate(self.min_map.dof_nodes()):
-            self.hessian[ii] *= self.min_map.torsion_scale_factor(node)
+        min_count = 1
+        while True:
+            self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
+            for ii, node in enumerate(self.min_map.dof_nodes()):
+                self.hessian[ii] *= self.min_map.torsion_scale_factor(node)    
+            self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
             
-        self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
-		
+            # if hessian is not positive definite, attempt another round of minimization
+            if not np.all(self.eigenvalues > 0):
+                if min_count > 2:
+                    print("Minimization did not converge after three attempts. Proceeding with negative "
+                          "modes.")
+                    break               
+                
+                print "Hessian is not positive-definite; attempting additional minimization."
+                self.gradient_free_minimize(n_cycles=100)
+                #self.min_dofs = self.find_minimum()
+                min_count += 1
+            
+            else:
+                print("Minimization complete")
+                break
+                
 		# Function for density of states
         self.dos = lambda E: (2.0*np.pi)**(self.n_dofs/2)*(E-self.min_energy)**(self.n_dofs/2 - 1)/gamma(self.n_dofs/2)/np.sqrt(np.linalg.det(self.hessian))*np.heaviside(E-self.min_energy, 0.5)
 		
@@ -164,7 +174,7 @@ class MiningMinima:
             
         # set up minimizer and run
         minimizer = core.optimization.Minimizer(self.multifunc, min_options)
-        minimizer.run(min_dofs)
+        for _ in range(10): minimizer.run(min_dofs)
         
         # copy new min dofs to min pose
         self.min_map.copy_dofs_to_pose(self.min_pose, min_dofs)
@@ -214,32 +224,36 @@ def powell_minimize(start_dofs, multifunc, ndofs=1):
         energy = multifunc(min_dofs)
         return energy
     
+    ndofs = len(start_dofs)
     result = minimize(min_func, x0=np.array(start_dofs), args=(multifunc,), method='Powell',
                       options={'maxfev': ndofs*1000}, tol=1.5e-10)
     return result.x, result.fun # return min_dofs (x) and funciton value (fun)
     
  
 def hessian_at_min(min_dofs, multifunc, h=1.5e-5):
-    min_dofs = np.array(min_dofs) # take advantage of numpy indexing/slicing
     n_dofs = len(min_dofs)
     hessian = np.zeros((n_dofs,n_dofs))
     plus = Vector1([0.0]*n_dofs)
     minus = Vector1([0.0]*n_dofs)
+    plusplus = Vector1([0.0]*n_dofs)
+    minusmiuns = Vector1([0.0]*n_dofs)   
     
     for ii in range(n_dofs):
-        new_dofs = min_dofs[:]
+        new_dofs = np.array(min_dofs)
         new_dofs[ii] += h*180./np.pi # dofs in degrees
         multifunc.dfunc(Vector1(list(new_dofs)), plus)
         new_dofs[ii] -= 2*h*180./np.pi
         multifunc.dfunc(Vector1(list(new_dofs)), minus)
         
-        #central difference scheme
-        row = (np.array(plus) - np.array(minus))/2./h
-        hessian[ii] = row * 1.0
+        # central difference scheme
+        row = (np.array(plus) - np.array(minus))/4./h
+        hessian[ii] += row
+        hessian[:,ii] += row
+        
     return 0.5*(hessian + hessian.T) # enforce symmetry
     
     
-def mode_scan(min_dofs, multifunc, mode, limit=np.pi/3, dx=0.005):
+def mode_scan(min_dofs, multifunc, mode, limit=np.pi/3, dx=0.001):
     # convert to np array for useful indexing
     min_dofs = np.array(min_dofs)
     displacement_array = np.linspace(-limit, limit, int(2*limit/dx)+1)

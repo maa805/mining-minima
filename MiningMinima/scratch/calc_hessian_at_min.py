@@ -3,13 +3,13 @@ import itertools
 from hessian import numpy_hessian
 from pyrosetta import *
 from pyrosetta.rosetta import *
-init()
+
 def calc_hessian_at_min(pose_min, scorefxn, dof_dict):
     '''Take a minimized pose and computes the hessian at the base of the corresponding energy well.
 	Returns the hessian matrix which may subsequently be diagonalized'''
 	
-    h = 0.1
-    sig = 0.6
+    h = 0.001
+    sig = 0.006
 	
     h_rad = h*np.pi/180
     E_0 = scorefxn(pose_min)
