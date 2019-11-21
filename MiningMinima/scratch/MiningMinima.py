@@ -230,7 +230,7 @@ def powell_minimize(start_dofs, multifunc, ndofs=1):
     return result.x, result.fun # return min_dofs (x) and funciton value (fun)
     
  
-def hessian_at_min(min_dofs, multifunc, h=1.5e-5):
+def hessian_at_min(min_dofs, multifunc, h=1.5e-4):
     n_dofs = len(min_dofs)
     hessian = np.zeros((n_dofs,n_dofs))
     plus = Vector1([0.0]*n_dofs)
