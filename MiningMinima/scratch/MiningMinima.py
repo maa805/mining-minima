@@ -10,6 +10,7 @@ init()
 
 from pose_setup import add_bb_suite
 from pose_setup import add_chi_dofs
+from calc_hessian_at_min_refactor import calc_hessian_at_min
 
 KT_IN_KCAL = 0.6163
 
@@ -33,19 +34,29 @@ class MiningMinima:
         self.min_pose.assign(self.input_pose)
         self.set_up_multifunc(self.min_pose)
         
+        rna_min_options = core.import_pose.options.RNA_MinimizerOptions()
+        rna_min_options.set_max_iter(10000)
+        rna_minimizer = protocols.rna.denovo.movers.RNA_Minimizer(rna_min_options)
+        rna_minimizer.set_score_function(self.scorefxn)
+        rna_minimizer.set_min_tol(1.5e-9)
+        rna_minimizer.apply(self.min_pose)
+        
         # find the min_dofs
-        self.min_dofs = self.find_minimum()
+        min_dofs = Vector1([0.0]*self.n_dofs)
+        self.min_map.copy_dofs_from_pose(self.min_pose, min_dofs)
+        self.min_dofs = min_dofs
+        self.find_minimum()
         self.min_energy = self.scorefxn(self.min_pose)
         
         # perform gradient-free minimization to reduce numerical errors
-        self.gradient_free_minimize(n_cycles=100)
+        #self.gradient_free_minimize(n_cycles=100)
 
         # Calculate hessian at base of minimum and normal modes
         min_count = 1
         while True:
-            self.hessian = hessian_at_min(self.min_dofs, self.multifunc)
+            self.hessian = calc_hessian_at_min(self.min_dofs, self.multifunc)#hessian_at_min(self.min_dofs, self.multifunc)
             for ii, node in enumerate(self.min_map.dof_nodes()):
-                self.hessian[ii] *= self.min_map.torsion_scale_factor(node)    
+                self.hessian[ii] *= 1#self.min_map.torsion_scale_factor(node)    
             self.eigenvalues, self.modes = np.linalg.eigh(self.hessian)
             
             # if hessian is not positive definite, attempt another round of minimization
@@ -56,7 +67,9 @@ class MiningMinima:
                     break               
                 
                 print "Hessian is not positive-definite; attempting additional minimization."
-                self.gradient_free_minimize(n_cycles=100)
+                rna_minimizer.apply(self.min_pose)
+                self.find_minimum()
+                #self.gradient_free_minimize(n_cycles=100)
                 #self.min_dofs = self.find_minimum()
                 min_count += 1
             
@@ -146,7 +159,7 @@ class MiningMinima:
         min_map.setup(pose, self.movemap)
         
         start_score = self.scorefxn(pose)
-        self.input_pose.energies().set_use_nblist(pose,min_map.domain_map(),True)
+        self.input_pose.energies().set_use_nblist(pose, min_map.domain_map(), True)
         multifunc = core.optimization.AtomTreeMultifunc(pose, min_map, self.scorefxn)
 
         # values to return 
@@ -164,7 +177,7 @@ class MiningMinima:
         self.scorefxn.setup_for_derivatives(self.min_pose)
    
         min_options.use_nblist(True)
-        min_options.nblist_auto_update(True) # for some reason off by default 
+        min_options.nblist_auto_update(True)  # for some reason off by default 
         
         # initialize min_dofs and gradient containers
         min_dofs = Vector1([0.0]*self.n_dofs)
@@ -176,8 +189,14 @@ class MiningMinima:
         minimizer = core.optimization.Minimizer(self.multifunc, min_options)
         for _ in range(10): minimizer.run(min_dofs)
         
+        # clean up after minimizing 
+        self.min_pose.energies().reset_nblist()
+        self.min_map.reset_jump_rb_deltas(self.min_pose, min_dofs)
+        self.scorefxn.finalize_after_minimizing(self.min_pose)
+        
         # copy new min dofs to min pose
         self.min_map.copy_dofs_to_pose(self.min_pose, min_dofs)
+        self.min_dofs = min_dofs
         return np.array(min_dofs)
 
     def gradient_free_minimize(self, n_cycles=0):
@@ -194,6 +213,8 @@ class MiningMinima:
             print abs(new_energy-old_energy)
             
         self.min_dofs = array_to_vector1(min_dofs) 
+        self.min_map.copy_dofs_to_pose(self.min_pose, self.min_dofs)
+        return np.array(min_dofs)
     
     def calc_anharmonic_free_energy(self):
         self.total_log_partition, self.total_log_harmonic, self.mode_scans = compute_total_partition(self.min_dofs, self.multifunc, self.modes, self.eigenvalues)
@@ -275,7 +296,8 @@ def compute_total_partition(min_dofs, multifunc, modes, eigenvalues, limit=np.pi
     xx = np.linspace(-limit, limit, int(2*limit/dx)+1)
     min_energy = multifunc(array_to_vector1(min_dofs))
 
-    for ii, mode in enumerate(modes.T):      # columns of array are eigenvectors
+    for ii, mode in enumerate(modes.T):  # columns of array are eigenvectors
+        if eigenvalues[ii] < 0: continue
         result = mode_scan(min_dofs, multifunc, mode, limit=limit, dx=dx)
         result -= min_energy                 # energy is relative to base of well
         scans = scans + (result,)
